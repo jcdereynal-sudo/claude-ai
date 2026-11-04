@@ -1,5 +1,5 @@
 // Service worker : met l'application en cache pour un fonctionnement hors ligne.
-const VERSION = "v1";
+const VERSION = "v2";
 const SHELL = [
   "./", "index.html", "style.css", "app.js", "detector.js", "worker.js", "ai.js",
   "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png", "icons/icon-maskable-512.png",

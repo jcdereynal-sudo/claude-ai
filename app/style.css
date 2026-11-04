@@ -119,8 +119,14 @@ body {
 .slider { display: flex; flex-direction: column; gap: 2px; font-size: 14px; color: var(--muted); }
 .slider output { color: var(--text); font-variant-numeric: tabular-nums; }
 .slider input { width: 100%; accent-color: var(--accent); height: 28px; }
-.actions { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
-.actions .btn { padding: 12px 4px; font-size: 14px; }
+.zone-panel { flex-direction: row; gap: 8px; }
+.zone-panel .btn { flex: 1; }
+.actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.actions .btn { padding: 10px 4px; font-size: 14px; }
+@media (min-width: 520px) {
+  .actions { grid-template-columns: repeat(6, 1fr); }
+}
+.btn.has-zone { border-color: #ffd23f; color: #ffd23f; }
 
 .busy {
   position: absolute; inset: 0;

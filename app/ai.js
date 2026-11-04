@@ -31,9 +31,10 @@ const SCHEMA = {
  * @param {number} width       dimensions de l'image envoyée
  * @param {number} height
  * @param {number|null} diameterHint  diamètre approximatif d'un tuyau dans cette image (px)
+ * @param {boolean} [masked=false]   des parties de l'image sont masquées en gris uni (hors zone)
  * @returns {Promise<{count:number, pipes:{x:number,y:number}[], notes:string}>}
  */
-export async function countWithClaude(apiKey, jpegBase64, width, height, diameterHint) {
+export async function countWithClaude(apiKey, jpegBase64, width, height, diameterHint, masked = false) {
   let Anthropic;
   try {
     ({ default: Anthropic } = await import(SDK_URL));
@@ -48,6 +49,7 @@ export async function countWithClaude(apiKey, jpegBase64, width, height, diamete
   const prompt =
     `Cette photo (${width} × ${height} px) montre un fagot de tuyaux vus de face : on voit leurs extrémités circulaires.` +
     hint +
+    (masked ? " Les parties en gris uni sont masquées : ne comptez que les tuyaux visibles hors de ces parties grises." : "") +
     " Repérez chaque extrémité de tuyau visible, y compris celles partiellement cachées sur les bords du fagot," +
     " et donnez le centre de chacune en pixels (origine en haut à gauche). Ne comptez chaque tuyau qu'une fois," +
     " et ignorez les objets qui ne sont pas des tuyaux. « count » doit être égal au nombre d'éléments de « pipes ».";

@@ -7,6 +7,7 @@ const els = {
   empty: $("empty"), toolbar: $("toolbar"), badge: $("countBadge"), count: $("countValue"),
   hint: $("hint"), busy: $("busy"), busyText: $("busyText"), toast: $("toast"),
   calibPanel: $("calibPanel"), diam: $("diam"), diamOut: $("diamOut"), sens: $("sens"), sensOut: $("sensOut"),
+  zonePanel: $("zonePanel"), btnZone: $("btnZone"), btnZoneClear: $("btnZoneClear"), btnZoneDone: $("btnZoneDone"),
   btnNew: $("btnNew"), btnMode: $("btnMode"), btnUndo: $("btnUndo"), btnCount: $("btnCount"), btnAI: $("btnAI"),
   dlg: $("dlgSettings"), apiKey: $("apiKey"),
 };
@@ -19,8 +20,10 @@ const COLORS = { auto: "#2fbf71", manual: "#3d9bff", ai: "#b57bff" };
 let image = null;                 // canvas contenant la photo
 let markers = [];                 // {x, y, r, src: 'auto'|'manual'|'ai'} en px image
 let undoStack = [];
-let mode = "calibrate";           // 'calibrate' | 'edit'
+let mode = "calibrate";           // 'calibrate' | 'edit' | 'zone'
+let modeBeforeZone = "calibrate";
 let guide = null;                 // {x, y} centre du cercle-guide (px image)
+let zone = null;                  // polygone [{x, y}] (px image) : seule zone comptée, ou null = toute la photo
 let view = { scale: 1, tx: 0, ty: 0 };
 let dpr = window.devicePixelRatio || 1;
 let hasCounted = false;
@@ -69,6 +72,7 @@ async function loadFile(file) {
     markers = [];
     undoStack = [];
     hasCounted = false;
+    zone = null;
     const minSide = Math.min(c.width, c.height);
     els.diam.min = Math.max(6, Math.round(minSide * 0.01));
     els.diam.max = Math.round(minSide * 0.5);
@@ -88,7 +92,7 @@ async function loadFile(file) {
 }
 
 function resetToEmpty() {
-  image = null; markers = []; undoStack = []; guide = null; hasCounted = false;
+  image = null; markers = []; undoStack = []; guide = null; hasCounted = false; zone = null;
   els.empty.hidden = false;
   els.toolbar.hidden = true;
   els.badge.hidden = true;
@@ -100,21 +104,108 @@ function resetToEmpty() {
 els.btnMode.addEventListener("click", () => setMode(mode === "calibrate" ? "edit" : "calibrate"));
 
 function setMode(m) {
+  if (m === "zone" && mode !== "zone") modeBeforeZone = mode;
   mode = m;
   els.calibPanel.hidden = m !== "calibrate";
+  els.zonePanel.hidden = m !== "zone";
   els.btnMode.textContent = m === "calibrate" ? "Corriger" : "Diamètre";
   els.btnMode.title = m === "calibrate" ? "Passer en correction manuelle" : "Régler le diamètre des tuyaux";
+  els.btnZone.classList.toggle("active", m === "zone");
   setHint();
+  updateUI();
   resize();
   draw();
+}
+
+// ---------- Zone à compter ----------
+els.btnZone.addEventListener("click", () => setMode(mode === "zone" ? modeBeforeZone : "zone"));
+els.btnZoneDone.addEventListener("click", () => setMode(modeBeforeZone));
+els.btnZoneClear.addEventListener("click", () => {
+  if (!zone) return;
+  pushUndo();
+  zone = null;
+  updateUI();
+  draw();
+  if (hasCounted) toast("Zone effacée. Touchez « Compter » pour recompter toute la photo.");
+});
+
+function finishZone(pts) {
+  const poly = simplify(pts, 2 / view.scale);
+  if (poly.length < 3 || Math.abs(polyArea(poly)) < (Number(els.diam.value) ** 2)) {
+    toast("Zone trop petite : entourez les tuyaux à compter d'un trait continu.", true);
+    draw();
+    return;
+  }
+  pushUndo();
+  zone = poly;
+  // Les repères hors de la zone ne comptent plus.
+  if (markers.length) markers = markers.filter((m) => inZone(m));
+  // Place le cercle-guide dans la zone s'il n'y est pas.
+  if (!guide || !inZone(guide)) {
+    const b = bbox(zone);
+    guide = { x: (b.minX + b.maxX) / 2, y: (b.minY + b.maxY) / 2 };
+  }
+  setMode(modeBeforeZone);
+  if (!hasCounted) toast("Zone enregistrée. Réglez le diamètre puis touchez « Compter ».");
+}
+
+function inZone(p) {
+  if (!zone) return true;
+  let inside = false;
+  for (let i = 0, j = zone.length - 1; i < zone.length; j = i++) {
+    const a = zone[i], b = zone[j];
+    if ((a.y > p.y) !== (b.y > p.y) && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x) inside = !inside;
+  }
+  return inside;
+}
+
+function bbox(poly) {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const p of poly) {
+    if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+    if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
+  }
+  return { minX, minY, maxX, maxY };
+}
+
+function polyArea(poly) {
+  let a = 0;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) a += (poly[j].x + poly[i].x) * (poly[j].y - poly[i].y);
+  return a / 2;
+}
+
+function simplify(pts, minDist) {
+  const out = [];
+  for (const p of pts) {
+    const q = out[out.length - 1];
+    if (!q || Math.hypot(p.x - q.x, p.y - q.y) >= minDist) out.push(p);
+  }
+  return out;
+}
+
+/** Rectangle (px image, entiers) à analyser : la zone + une marge, ou toute la photo. */
+function analysisRect(margin) {
+  if (!zone) return { x: 0, y: 0, w: image.width, h: image.height };
+  const b = bbox(zone);
+  const x = Math.max(0, Math.floor(b.minX - margin)), y = Math.max(0, Math.floor(b.minY - margin));
+  const x2 = Math.min(image.width, Math.ceil(b.maxX + margin)), y2 = Math.min(image.height, Math.ceil(b.maxY + margin));
+  return { x, y, w: Math.max(1, x2 - x), h: Math.max(1, y2 - y) };
+}
+
+function tracePolygon(c, poly) {
+  c.beginPath();
+  poly.forEach((p, i) => (i ? c.lineTo(p.x, p.y) : c.moveTo(p.x, p.y)));
+  c.closePath();
 }
 
 function setHint() {
   if (!image) { els.hint.hidden = true; return; }
   els.hint.hidden = false;
-  els.hint.textContent = mode === "calibrate"
-    ? "Touchez un tuyau pour y placer le cercle, ajustez le diamètre au tuyau, puis « Compter »."
-    : "Touchez un tuyau oublié pour l'ajouter, ou un repère erroné pour le retirer. Pincez pour zoomer.";
+  els.hint.textContent = mode === "zone"
+    ? "Entourez au doigt les tuyaux à compter, d'un seul trait. Le reste de la photo sera ignoré. Deux doigts pour zoomer ou déplacer."
+    : mode === "calibrate"
+      ? "Touchez un tuyau pour y placer le cercle, ajustez le diamètre au tuyau, puis « Compter »."
+      : "Touchez un tuyau oublié pour l'ajouter, ou un repère erroné pour le retirer. Pincez pour zoomer.";
 }
 
 // ---------- Curseurs ----------
@@ -127,6 +218,8 @@ function updateUI() {
   els.count.textContent = String(markers.length);
   els.badge.hidden = !hasCounted && markers.length === 0;
   els.btnUndo.disabled = undoStack.length === 0;
+  els.btnZone.classList.toggle("has-zone", !!zone);
+  els.btnZoneClear.disabled = !zone;
 }
 
 // ---------- Comptage hors ligne ----------
@@ -149,16 +242,19 @@ els.btnCount.addEventListener("click", countOffline);
 async function countOffline() {
   if (!image) return;
   const r = Number(els.diam.value) / 2;
+  // Toujours toute la photo : les seuils de détection dépendent de l'image analysée,
+  // et un recadrage donnerait des résultats différents. La zone filtre ensuite.
+  const rect = { x: 0, y: 0, w: image.width, h: image.height };
   let s = scaleFor(r);
-  if (image.width * image.height * s * s > MAX_WORK_PIXELS) s = Math.sqrt(MAX_WORK_PIXELS / (image.width * image.height));
-  const w = Math.max(1, Math.round(image.width * s)), h = Math.max(1, Math.round(image.height * s));
+  if (rect.w * rect.h * s * s > MAX_WORK_PIXELS) s = Math.sqrt(MAX_WORK_PIXELS / (rect.w * rect.h));
+  const w = Math.max(1, Math.round(rect.w * s)), h = Math.max(1, Math.round(rect.h * s));
   showBusy("Comptage en cours…");
   try {
     const work = document.createElement("canvas");
     work.width = w; work.height = h;
     const wctx = work.getContext("2d", { willReadFrequently: true });
     wctx.imageSmoothingQuality = "high";
-    wctx.drawImage(image, 0, 0, w, h);
+    wctx.drawImage(image, rect.x, rect.y, rect.w, rect.h, 0, 0, w, h);
     const data = wctx.getImageData(0, 0, w, h);
     const id = ++jobId;
     const circles = await new Promise((resolve, reject) => {
@@ -166,7 +262,9 @@ async function countOffline() {
       worker.postMessage({ id, buffer: data.data.buffer, width: w, height: h, radius: r * s, sensitivity: Number(els.sens.value) / 100 }, [data.data.buffer]);
     });
     pushUndo();
-    markers = circles.map((c) => ({ x: c.x / s, y: c.y / s, r: c.r / s, src: "auto" }));
+    markers = circles
+      .map((c) => ({ x: rect.x + c.x / s, y: rect.y + c.y / s, r: c.r / s, src: "auto" }))
+      .filter((m) => inZone(m));
     hasCounted = true;
     setMode("edit");
     updateUI();
@@ -196,18 +294,29 @@ async function countWithAI() {
   showBusy("Analyse par IA… (jusqu'à une minute)");
   try {
     const { countWithClaude } = await import("./ai.js");
-    const k = Math.min(1, 1568 / Math.max(image.width, image.height));
-    const c = document.createElement("canvas");
-    c.width = Math.round(image.width * k); c.height = Math.round(image.height * k);
-    c.getContext("2d").drawImage(image, 0, 0, c.width, c.height);
-    const b64 = c.toDataURL("image/jpeg", 0.9).split(",")[1];
     const diam = Number(els.diam.value);
-    const res = await countWithClaude(key, b64, c.width, c.height, hasCounted || mode === "calibrate" ? diam * k : null);
+    const rect = analysisRect(diam);
+    const k = Math.min(1, 1568 / Math.max(rect.w, rect.h));
+    const c = document.createElement("canvas");
+    c.width = Math.max(1, Math.round(rect.w * k)); c.height = Math.max(1, Math.round(rect.h * k));
+    const cctx = c.getContext("2d");
+    cctx.fillStyle = "#808080";
+    cctx.fillRect(0, 0, c.width, c.height);
+    cctx.save();
+    if (zone) {
+      // hors de la zone : gris uni, pour que l'IA n'y compte rien
+      tracePolygon(cctx, zone.map((p) => ({ x: (p.x - rect.x) * k, y: (p.y - rect.y) * k })));
+      cctx.clip();
+    }
+    cctx.drawImage(image, rect.x, rect.y, rect.w, rect.h, 0, 0, c.width, c.height);
+    cctx.restore();
+    const b64 = c.toDataURL("image/jpeg", 0.9).split(",")[1];
+    const res = await countWithClaude(key, b64, c.width, c.height, hasCounted || mode === "calibrate" ? diam * k : null, !!zone);
     pushUndo();
     const r = diam / 2;
     markers = res.pipes
-      .map((p) => ({ x: p.x / k, y: p.y / k, r, src: "ai" }))
-      .filter((m) => m.x >= 0 && m.y >= 0 && m.x <= image.width && m.y <= image.height);
+      .map((p) => ({ x: rect.x + p.x / k, y: rect.y + p.y / k, r, src: "ai" }))
+      .filter((m) => m.x >= 0 && m.y >= 0 && m.x <= image.width && m.y <= image.height && inZone(m));
     hasCounted = true;
     setMode("edit");
     updateUI();
@@ -229,12 +338,13 @@ els.btnUndo.addEventListener("click", () => {
   if (!prev) return;
   markers = prev.markers;
   hasCounted = prev.hasCounted;
+  zone = prev.zone;
   updateUI();
   draw();
 });
 
 function pushUndo() {
-  undoStack.push({ markers: markers.map((m) => ({ ...m })), hasCounted });
+  undoStack.push({ markers: markers.map((m) => ({ ...m })), hasCounted, zone });
   if (undoStack.length > 50) undoStack.shift();
 }
 
@@ -247,7 +357,10 @@ canvas.addEventListener("pointerdown", (e) => {
   canvas.setPointerCapture(e.pointerId);
   pointers.set(e.pointerId, pt(e));
   if (pointers.size === 1) {
-    gesture = { type: "pan", start: pt(e), last: pt(e), moved: false, multi: false };
+    gesture = mode === "zone"
+      ? { type: "draw", pts: [toImage(pt(e))] }
+      : { type: "pan", start: pt(e), last: pt(e), moved: false, multi: false };
+    if (gesture.type === "draw") draw();
   } else if (pointers.size === 2) {
     const [a, b] = [...pointers.values()];
     gesture = { type: "pinch", dist: Math.hypot(a.x - b.x, a.y - b.y), mid: mid(a, b), view: { ...view }, multi: true };
@@ -257,7 +370,10 @@ canvas.addEventListener("pointerdown", (e) => {
 canvas.addEventListener("pointermove", (e) => {
   if (!pointers.has(e.pointerId) || !gesture) return;
   pointers.set(e.pointerId, pt(e));
-  if (gesture.type === "pan" && pointers.size === 1) {
+  if (gesture.type === "draw" && pointers.size === 1) {
+    gesture.pts.push(toImage(pt(e)));
+    draw();
+  } else if (gesture.type === "pan" && pointers.size === 1) {
     const p = pt(e);
     if (!gesture.moved && Math.hypot(p.x - gesture.start.x, p.y - gesture.start.y) > 8) gesture.moved = true;
     if (gesture.moved) {
@@ -286,8 +402,11 @@ const endPointer = (e) => {
   pointers.delete(e.pointerId);
   if (!gesture) return;
   if (pointers.size === 0) {
-    if (gesture.type === "pan" && !gesture.moved && !gesture.multi && e.type === "pointerup") onTap(pt(e));
+    const g = gesture;
     gesture = null;
+    if (g.type === "draw") {
+      if (e.type === "pointerup") finishZone(g.pts); else draw();
+    } else if (g.type === "pan" && !g.moved && !g.multi && e.type === "pointerup") onTap(pt(e));
   } else if (pointers.size === 1) {
     // fin du pincement : on continue en déplacement, sans déclencher de "tap"
     const p = [...pointers.values()][0];
@@ -309,7 +428,12 @@ canvas.addEventListener("wheel", (e) => {
   draw();
 }, { passive: false });
 
+function toImage(p) {
+  return { x: (p.x - view.tx) / view.scale, y: (p.y - view.ty) / view.scale };
+}
+
 function onTap(p) {
+  if (mode === "zone") return;
   const ix = (p.x - view.tx) / view.scale, iy = (p.y - view.ty) / view.scale;
   if (ix < 0 || iy < 0 || ix > image.width || iy > image.height) return;
   if (mode === "calibrate") {
@@ -374,6 +498,29 @@ function draw() {
   ctx.imageSmoothingQuality = "high";
   ctx.drawImage(image, 0, 0);
   const px = 1 / view.scale; // 1 pixel écran en unités image
+
+  if (zone) {
+    // assombrit l'extérieur de la zone
+    ctx.beginPath();
+    ctx.rect(0, 0, image.width, image.height);
+    zone.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+    ctx.closePath();
+    ctx.fillStyle = "rgba(0, 0, 0, 0.55)";
+    ctx.fill("evenodd");
+    tracePolygon(ctx, zone);
+    ctx.lineWidth = 2.5 * px;
+    ctx.strokeStyle = "#ffd23f";
+    ctx.setLineDash([10 * px, 6 * px]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  if (gesture && gesture.type === "draw" && gesture.pts.length > 1) {
+    ctx.beginPath();
+    gesture.pts.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+    ctx.lineWidth = 3 * px;
+    ctx.strokeStyle = "#ffd23f";
+    ctx.stroke();
+  }
 
   for (const m of markers) {
     const color = COLORS[m.src] || COLORS.auto;
