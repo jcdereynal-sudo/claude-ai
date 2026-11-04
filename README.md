@@ -5,10 +5,11 @@ Application mobile (web app installable / PWA) pour **compter des tuyaux sur une
 ## Fonctionnement
 
 1. **Photo** : « Prendre une photo » (appareil photo arrière) ou « Choisir dans les photos ».
-2. **Diamètre** : touchez un tuyau pour y placer le cercle jaune, puis ajustez le curseur *Diamètre* pour qu'il épouse l'extrémité du tuyau. La *Sensibilité* règle la tolérance (plus haut = plus de détections, plus de risques d'erreur).
-3. **Compter** : détection hors ligne, sur le téléphone. Le total s'affiche en haut.
-4. **Corriger** : touchez un tuyau oublié pour l'ajouter (repère bleu), ou un repère erroné pour le retirer. Pincez pour zoomer, glissez pour vous déplacer. « Annuler » revient en arrière.
-5. **IA** (option, en ligne) : envoie la photo à Claude (Anthropic) pour les photos difficiles. Il faut une clé API Anthropic, à saisir dans ⚙ (stockée uniquement sur le téléphone). Chaque analyse est facturée sur le compte Anthropic. Les repères de l'IA sont violets et se corrigent de la même façon.
+2. **Zone** (facultatif) : si la photo contient d'autres tuyaux ou objets à ne pas compter, touchez « Zone » et entourez au doigt, d'un seul trait, les tuyaux à compter. L'extérieur est assombri et ignoré (comptage, ajouts de l'IA). « Effacer la zone » revient à toute la photo ; « Annuler » défait aussi un tracé.
+3. **Diamètre** : touchez un tuyau pour y placer le cercle jaune, puis ajustez le curseur *Diamètre* pour qu'il épouse l'extrémité du tuyau. La *Sensibilité* règle la tolérance (plus haut = plus de détections, plus de risques d'erreur).
+4. **Compter** : détection hors ligne, sur le téléphone. Le total s'affiche en haut.
+5. **Corriger** : touchez un tuyau oublié pour l'ajouter (repère bleu), ou un repère erroné pour le retirer. Pincez pour zoomer, glissez pour vous déplacer. « Annuler » revient en arrière.
+6. **IA** (option, en ligne) : envoie la photo à Claude (Anthropic) pour les photos difficiles. Il faut une clé API Anthropic, à saisir dans ⚙ (stockée uniquement sur le téléphone). Chaque analyse est facturée sur le compte Anthropic. Les repères de l'IA sont violets et se corrigent de la même façon.
 
 Couleurs des repères : vert = détection automatique, bleu = ajout manuel, violet = IA.
 
@@ -19,12 +20,11 @@ Couleurs des repères : vert = détection automatique, bleu = ajout manuel, viol
 
 ## Installation sur le téléphone
 
-L'application est servie par GitHub Pages (workflow `.github/workflows/pages.yml`) :
-1. Dans le dépôt GitHub : **Settings → Pages → Source : GitHub Actions** (une seule fois).
-2. Chaque push sur `main` lance les tests puis publie le dossier `app/`.
-3. Ouvrir l'URL publiée sur le téléphone, puis **Ajouter à l'écran d'accueil** (Chrome Android : menu ⋮ ; iPhone/Safari : bouton Partager).
+L'application est publiée par Netlify : **https://compte-tubes.netlify.app** (republiée à chaque push sur la branche de production ; réglages dans `netlify.toml`).
 
-Après la première ouverture, le comptage fonctionne sans réseau.
+Ouvrir l'adresse sur le téléphone, puis **Ajouter à l'écran d'accueil** (Chrome Android : menu ⋮ ; iPhone/Safari : bouton Partager). Après la première ouverture, le comptage fonctionne sans réseau.
+
+Le workflow `.github/workflows/tests.yml` lance les tests du détecteur à chaque push et pull request.
 
 ## Développement
 
