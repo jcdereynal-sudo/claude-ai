@@ -1,5 +1,5 @@
 // Service worker : met l'application en cache pour un fonctionnement hors ligne.
-const VERSION = "v2";
+const VERSION = "tubes-v3";
 const SHELL = [
   "./", "index.html", "style.css", "app.js", "detector.js", "worker.js", "ai.js",
   "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png", "icons/icon-maskable-512.png",
@@ -12,7 +12,7 @@ self.addEventListener("install", (e) => {
 self.addEventListener("activate", (e) => {
   e.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== VERSION).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => k !== VERSION && !k.startsWith("vis-")).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
