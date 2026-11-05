@@ -167,3 +167,5 @@ dialog p { color: var(--muted); line-height: 1.45; font-size: 14px; }
   border: 1px solid #36404b; background: var(--bg); color: var(--text);
 }
 .dlg-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
+.switch-link { color: var(--muted); font-size: 14px; text-decoration: none; padding: 8px; }
+.switch-link:active { color: var(--text); }

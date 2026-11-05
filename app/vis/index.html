@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <title>Compte-Vis</title>
+  <meta name="description" content="Compter des vis à partir d'une photo">
+  <meta name="theme-color" content="#14181d">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1>Compte-Vis</h1>
+    <button id="btnSettings" class="icon-btn" aria-label="Réglages IA" title="Réglages IA">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Zm7.4-2.5a7.6 7.6 0 0 0 0-2l2-1.6-2-3.4-2.4 1a7.4 7.4 0 0 0-1.7-1l-.4-2.5h-4l-.4 2.5a7.4 7.4 0 0 0-1.7 1l-2.4-1-2 3.4 2 1.6a7.6 7.6 0 0 0 0 2l-2 1.6 2 3.4 2.4-1a7.4 7.4 0 0 0 1.7 1l.4 2.5h4l.4-2.5a7.4 7.4 0 0 0 1.7-1l2.4 1 2-3.4-2-1.6Z"/></svg>
+    </button>
+  </header>
+
+  <main id="stage">
+    <canvas id="view"></canvas>
+
+    <div id="countBadge" class="count-badge" hidden>
+      <span id="countValue">0</span>
+      <span class="count-label">vis</span>
+    </div>
+
+    <div id="hint" class="hint" hidden></div>
+
+    <section id="empty" class="empty">
+      <div class="empty-art" aria-hidden="true">
+        <svg viewBox="0 0 120 100"><g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"><path d="M14 30h8M22 24v12M22 30h40l8 0"/><path d="M30 30v0M38 26l-3 8M46 26l-3 8M54 26l-3 8"/><path d="M40 62h8M48 56v12M48 62h40l8 0"/><path d="M64 58l-3 8M72 58l-3 8M80 58l-3 8"/><path d="M78 16l6 6M84 22l-8 8M84 22l20 20"/><path d="M90 26l4-4M96 32l4-4"/></g></svg>
+      </div>
+      <p><b>Étalez les vis sur une seule couche</b>, sans qu'elles se chevauchent, sur un fond uni et contrasté. Photographiez d'au-dessus, toutes les vis dans le cadre.</p>
+      <label class="btn primary big">
+        <input id="inCamera" type="file" accept="image/*" capture="environment" hidden>
+        Prendre une photo
+      </label>
+      <label class="btn big">
+        <input id="inGallery" type="file" accept="image/*" hidden>
+        Choisir dans les photos
+      </label>
+      <p class="small">Vis en vrac ? Le comptage donne une estimation (≈) ; le bouton <b>IA</b> fait mieux. Pour un compte exact, étalez-les.</p>
+      <a class="switch-link" href="../">Compter des tuyaux →</a>
+    </section>
+
+    <div id="busy" class="busy" hidden><div class="spinner"></div><span id="busyText">Analyse…</span></div>
+  </main>
+
+  <footer id="toolbar" class="toolbar" hidden>
+    <div id="tunePanel" class="panel" hidden>
+      <label class="slider">
+        <span>Sensibilité <output id="sensOut"></output></span>
+        <input id="sens" type="range" min="0" max="100" step="1" value="50">
+      </label>
+      <p class="panel-note" id="unitNote"></p>
+    </div>
+    <div id="zonePanel" class="panel zone-panel" hidden>
+      <button id="btnZoneClear" class="btn">Effacer la zone</button>
+      <button id="btnZoneDone" class="btn primary">Terminé</button>
+    </div>
+    <div class="actions">
+      <button id="btnNew" class="btn" title="Nouvelle photo">Photo</button>
+      <button id="btnZone" class="btn" title="Entourer la zone à compter">Zone</button>
+      <button id="btnMode" class="btn" title="Étalon et sensibilité">Étalon</button>
+      <button id="btnUndo" class="btn" title="Annuler la dernière modification" disabled>Annuler</button>
+      <button id="btnCount" class="btn primary">Compter</button>
+      <button id="btnAI" class="btn ai" title="Analyse par IA (Claude, en ligne)">IA</button>
+    </div>
+  </footer>
+
+  <dialog id="dlgSettings">
+    <form method="dialog">
+      <h2>Analyse par IA</h2>
+      <p>Le bouton <b>IA</b> envoie la photo à Claude (Anthropic) pour repérer les vis, utile quand elles sont en vrac. Il faut une connexion Internet et une clé API Anthropic. Chaque analyse est facturée sur votre compte Anthropic.</p>
+      <label class="field">
+        <span>Clé API Anthropic</span>
+        <input id="apiKey" type="password" autocomplete="off" placeholder="sk-ant-…">
+      </label>
+      <p class="small">La clé reste sur ce téléphone (stockage local du navigateur). Elle n'est envoyée qu'à api.anthropic.com. Si elle est déjà enregistrée dans Compte-Tubes, elle est reprise automatiquement.</p>
+      <div class="dlg-actions">
+        <button value="cancel" class="btn">Fermer</button>
+        <button id="btnSaveKey" value="save" class="btn primary">Enregistrer</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" hidden></div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

@@ -21,4 +21,5 @@ jobs:
           python-version: "3.12"
       - run: pip install pillow
       - run: python tests/make_samples.py samples && node tests/detector.test.mjs samples
+      - run: python tests/make_screw_samples.py vis_samples && node tests/screws.test.mjs vis_samples
 

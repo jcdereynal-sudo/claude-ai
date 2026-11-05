@@ -18,6 +18,18 @@ Couleurs des repères : vert = détection automatique, bleu = ajout manuel, viol
 - Éclairage homogène ; éviter les reflets forts et le contre-jour.
 - Des tuyaux de diamètres très différents sur une même photo : compter en deux fois (un diamètre à la fois), ou corriger à la main.
 
+## Compte-Vis (vis et petites pièces)
+
+Même principe pour **compter des vis** : **https://compte-tubes.netlify.app/vis/** (lien « Compter des vis → » sur l'écran d'accueil de Compte-Tubes). Application distincte, installable de la même façon.
+
+1. **Étaler les vis** sur une seule couche, sans chevauchement, sur un fond uni et contrasté (table, carton, feuille). Photographier d'au-dessus, toutes les vis dans le cadre.
+2. **Photo** : le comptage se lance tout seul, hors ligne. Un point vert par vis.
+3. **Vis qui se touchent** : la taille d'une vis seule sert d'étalon ; une tache de deux ou trois vis collées compte pour deux ou trois. Si l'étalon automatique se trompe, touchez « Étalon » puis **une vis bien isolée**. La *Sensibilité* se règle au même endroit.
+4. **Amas** (plus de 6 vis emmêlées, en orange) : nombre **estimé par la surface** (badge « ≈ »). Touchez l'amas pour saisir le nombre exact, ou étalez ces vis et reprenez une photo, ou touchez **IA**.
+5. **Corriger**, **Zone**, **Annuler**, **IA** : comme dans Compte-Tubes. La clé API saisie dans l'une des deux applications sert aux deux. La zone retient les taches dont le centre est dans le tracé.
+
+Couleurs : vert = détection, bleu = ajout ou nombre saisi à la main, violet = IA, orange = amas estimé.
+
 ## Installation sur le téléphone
 
 L'application est publiée par Netlify : **https://compte-tubes.netlify.app** (republiée à chaque push sur la branche de production ; réglages dans `netlify.toml`).
@@ -39,3 +51,8 @@ python3 tests/make_samples.py /tmp/samples && node tests/detector.test.mjs /tmp/
 - `app/ai.js` : analyse IA via le SDK Anthropic, chargé à la demande.
 - `app/sw.js` : cache hors ligne.
 - `tests/` : images synthétiques de fagots et test de précision du détecteur.
+- `app/vis/` : Compte-Vis (`screws.js` = détection des vis, même organisation que Compte-Tubes).
+
+```bash
+python3 tests/make_screw_samples.py /tmp/vis && node tests/screws.test.mjs /tmp/vis
+```
